@@ -54,6 +54,17 @@ cd
 uv run graphs/basic_chatbot/main.py
 ```
 
+### Memory Chatbot (`graphs/memory_chatbot/`)
+
+A simple chatbot that shows how to add in memory to a chatbot so it remembers what has been said before in the chat.
+
+**How to run:**
+
+```bash
+cd
+uv run graphs/memory_chatbot/main.py
+```
+
 ## Project Structure
 
 ```
