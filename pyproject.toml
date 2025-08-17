@@ -8,4 +8,5 @@ dependencies = [
     "dotenv>=0.9.9",
     "langchain[google-genai]>=0.3.27",
     "langgraph>=0.6.5",
+    "langgraph-checkpoint-sqlite>=2.0.11",
 ]
