@@ -18,37 +18,27 @@ class State(TypedDict):
 # Initialize the LLM
 llm = init_chat_model("google_genai:gemini-2.5-flash-lite")
 
-def list_packlist_missing_items():
-    print("Listing missing items")
-    # Here we would call the packlist API to get the missing items
-    return ["Sunscreen", "Water", "Snacks"]
+def show_gyms_city(city: str):
+    print(f"Showing gyms in {city}")
+    # Here we would call the gym API to get the equipment
+    return ["Gym 1", "Gym 2", "Gym 3"]
 
-def mark_item_as_packed(item_name: str):
-    print(f"Marking item {item_name} as packed")
-    # Here we would call the packlist API to mark the item as packed
-    return f"Item {item_name} marked as packed in the packlist"
-
-def add_item_to_packlist(item_name: str):
-    print(f"Adding item {item_name} to packlist")
-    # Here we would call the packlist API to add the item to the packlist
-    return f"Item {item_name} added to packlist"
+def show_gym_details(gym_name: str):
+    print(f"Showing details for {gym_name}")
+    # Here we would call the gym API to get the details
+    return "Gym 1 is a great gym"
 
 # Define the tools
 tools = [
     Tool(
-        name="list_packlist_missing_items",
-        description="List the missing items in the packlist",
-        func=list_packlist_missing_items,
+        name="show_gyms_city",
+        description="Show the gyms in a city",
+        func=show_gyms_city,
     ),
     Tool(
-        name="mark_item_as_packed",
-        description="Mark an item as packed",
-        func=mark_item_as_packed,
-    ),
-    Tool(
-        name="add_item_to_packlist",
-        description="Add an item to the packlist",
-        func=add_item_to_packlist,
+        name="show_gym_details",
+        description="Show the details of a gym",
+        func=show_gym_details,
     ),
 ]
 
