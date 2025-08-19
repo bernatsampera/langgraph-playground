@@ -1,0 +1,37 @@
+[
+    TelegramAndTrustFallPreferences(
+        pertinent_user_preferences=UserPreferences(
+            communication_preferences=CommunicationPreferences(
+                telegram=TelegramPreferences(
+                    preferred_encoding=[OutputFormat(preference='morse', sentence_preference_revealed='Morse, please.')],
+                    favorite_telegram_operators=[],
+                    preferred_telegram_paper=[
+                        OutputFormat(
+                            preference='Daredevil',
+                            sentence_preference_revealed='Shall I use our "Daredevil" paper for this daring message?'
+                        )
+                    ]
+                ),
+                morse_code=MorseCode(
+                    preferred_key_type=[
+                        OutputFormat(preference='straight key', sentence_preference_revealed='I love using a straight key.')
+                    ],
+                    favorite_morse_abbreviations=[]
+                ),
+                semaphore=Semaphore(preferred_flag_color=[], semaphore_skill_level=[])
+            ),
+            trust_fall_preferences=TrustFallPreferences(
+                preferred_fall_height=[
+                    OutputFormat(preference='higher', sentence_preference_revealed="Tell him I'm ready for a higher fall")
+                ],
+                trust_level=[],
+                preferred_catching_technique=[
+                    OutputFormat(
+                        preference='diamond formation',
+                        sentence_preference_revealed='I prefer the diamond formation for catching.'
+                    )
+                ]
+            )
+        )
+    )
+],

@@ -1,0 +1,48 @@
+{
+  "pertinent_user_preferences": {
+    "communication_preferences": {
+      "semaphore": {
+        "preferred_flag_color": [],
+        "semaphore_skill_level": []
+      },
+      "morse_code": {
+        "preferred_key_type": [
+          {
+            "sentence_preference_revealed": "I love using a straight key.",
+            "preference": "straight key"
+          }
+        ]
+      },
+      "telegram": {
+        "preferred_telegram_paper": [
+          {
+            "sentence_preference_revealed": "Shall I use our \"Daredevil\" paper for this daring message?",
+            "preference": "Daredevil"
+          }
+        ],
+        "favorite_telegram_operators": [],
+        "preferred_encoding": [
+          {
+            "sentence_preference_revealed": "Morse, please.",
+            "preference": "Morse"
+          }
+        ]
+      }
+    },
+    "trust_fall_preferences": {
+      "preferred_fall_height": [
+        {
+          "sentence_preference_revealed": "Tell him I'm ready for a higher fall",
+          "preference": "higher"
+        }
+      ],
+      "trust_level": [],
+      "preferred_catching_technique": [
+        {
+          "sentence_preference_revealed": "and I prefer the diamond formation for catching.",
+          "preference": "diamond formation"
+        }
+      ]
+    }
+  }
+}
