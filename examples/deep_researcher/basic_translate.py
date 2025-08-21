@@ -18,40 +18,15 @@ class TranslateState(TranslateInputState):
 
     messages: Annotated[list[BaseMessage], add_messages]
     original_text: str = ""
-    current_translation: str = (
-        ""  # TODO: REMOVE, THIS IS FOR DEBUGGING PURPOSES IN LANGGRAPH STUDIO
-    )
     translate_iterations: int = 0
 
 
-glossary_en_es = {
-    "instrument": {
-        "value": "documento",
-        "comment": "Used when used in notarial acts and the legal document is being refered as instrument. Do not use in other contexts.",
-    },
-    "registrar": {
-        "value": "secretario/a",
-        "comment": "When used as a title of a school or university",
-    },
-    "global history": {
-        "value": "historia universal",
-        "comment": "When used as a subject. Just when the whole word global history appears, never use when global is not present",
-    },
-}
-
 translation_instructions = """
-You are a translation agent from english to spanish.
-
-You have a glossary of words that you can use to translate the text.
-Between brackets you will find the comment of the word, this give context of when the glossary should be used. 
-Be very strict and analyze the context to just use the glossary when necessary.
-Respect the case of the original word, even if the case in the glossary is different. Example: (Tree) should be (Árbol)
-
-{glossary}
+You are a translation agent from spanish to english.
 """
 
 first_translation_instructions = """
-Translate the following text to spanish:
+Translate the following text to english:
 {text}
 
 Follow the instructions:
@@ -71,38 +46,23 @@ Take a look at the feedback made by the user and improve the translation. Follow
 llm = init_chat_model(model="google_genai:gemini-2.5-flash-lite")
 
 
-def format_glossary(glossary: dict[str, dict[str, str]]) -> str:
-    return "\n".join(
-        [
-            f"{key}: {value['value']} ({value['comment']})"
-            for key, value in glossary.items()
-        ]
-    )
-
-
 def translate(state: TranslateState) -> Command[Literal["__end__"]]:
     """Translate the messages to the user."""
     translate_iterations = state.get("translate_iterations", 0)
     prompt = ""
 
-    prompt_translation_instructions = translation_instructions.format(
-        glossary=format_glossary(glossary_en_es)
-    )
-
     if translate_iterations == 0:
         state["original_text"] = state["messages"][-1].content
         prompt = first_translation_instructions.format(
             text=state["original_text"],
-            translation_instructions=prompt_translation_instructions,
+            translation_instructions=translation_instructions,
         )
     else:
         last_two_messages = state["messages"][-2:]
         prompt = improve_translation_instructions.format(
             messages=get_buffer_string(last_two_messages),
-            translation_instructions=prompt_translation_instructions,
+            translation_instructions=translation_instructions,
         )
-
-    print("prompt", prompt)
 
     response = llm.invoke(prompt)
 
@@ -112,7 +72,6 @@ def translate(state: TranslateState) -> Command[Literal["__end__"]]:
             "messages": [response],
             "original_text": state["original_text"],
             "translate_iterations": translate_iterations + 1,
-            "current_translation": response.content,  # TODO: REMOVE, THIS IS FOR DEBUGGING PURPOSES IN LANGGRAPH STUDIO
         },
     )
 
@@ -124,6 +83,3 @@ graph.add_node("translate", translate)
 graph.add_edge(START, "translate")
 
 graph = graph.compile()
-
-
-# the principal has used the instrument to give the global history class
