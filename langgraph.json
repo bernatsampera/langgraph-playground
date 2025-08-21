@@ -2,8 +2,7 @@
   "dockerfile_lines": [],
   "graphs": {
     "Command test": "./examples/deep_researcher/use_command.py:graph",
-    "translate": "./examples/deep_researcher/translate.py:app",
-    "drafter": "./examples/deep_researcher/drafter.py:app",
+    "translate": "./examples/deep_researcher/translate/index.py:graph",
     "chat_with_user": "./examples/deep_researcher/chat_with_user.py:graph"
   },
   "python_version": "3.12",
