@@ -7,9 +7,41 @@ requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
     "langchain[google-genai]>=0.3.27",
-    "langgraph>=0.6.5",
+    "langgraph>=0.5.4",
+    "langgraph-api>=0.3.0",
     "langgraph-checkpoint-sqlite>=2.0.11",
     "pydantic>=2.0.0",
     "rich>=14.1.0",
     "trustcall>=0.0.39",
 ]
+
+
+[tool.ruff]
+# Enable auto-fixing
+fix = true
+unsafe-fixes = false
+
+lint.select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+    "D",    # pydocstyle
+    "D401", # First line should be in imperative mood
+    "T201",
+    "UP",
+]
+lint.ignore = [
+    "UP006",
+    "UP007",
+    "UP035",
+    "D417",
+    "E501",
+]
+
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D", "UP"]
+
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
