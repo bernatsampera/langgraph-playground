@@ -11,6 +11,7 @@ dependencies = [
     "langgraph-api>=0.3.0",
     "langgraph-checkpoint-sqlite>=2.0.11",
     "pydantic>=2.0.0",
+    "rapidfuzz>=3.13.0",
     "rich>=14.1.0",
     "trustcall>=0.0.39",
 ]

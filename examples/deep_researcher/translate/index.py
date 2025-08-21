@@ -8,6 +8,14 @@ from langchain_core.messages import (
 from langgraph.graph import END, START, MessagesState, StateGraph, add_messages
 from langgraph.types import Command
 
+from examples.deep_researcher.translate.match_words import match_words_from_glossary
+from examples.deep_researcher.translate.prompts import (
+    first_translation_instructions,
+    improve_translation_instructions,
+    translation_instructions,
+)
+from examples.deep_researcher.translate.utils import format_glossary
+
 
 class TranslateInputState(MessagesState):
     """Input state containing only messages."""
@@ -21,6 +29,9 @@ class TranslateState(TranslateInputState):
     current_translation: str = (
         ""  # TODO: REMOVE, THIS IS FOR DEBUGGING PURPOSES IN LANGGRAPH STUDIO
     )
+    words_to_match: dict[
+        str, str
+    ] = {}  # TODO: REMOVE, THIS IS FOR DEBUGGING PURPOSES IN LANGGRAPH STUDIO
     translate_iterations: int = 0
 
 
@@ -39,45 +50,8 @@ glossary_en_es = {
     },
 }
 
-translation_instructions = """
-You are a translation agent from english to spanish.
-
-You have a glossary of words that you can use to translate the text.
-Between brackets you will find the comment of the word, this give context of when the glossary should be used. 
-Be very strict and analyze the context to just use the glossary when necessary.
-Respect the case of the original word, even if the case in the glossary is different. Example: (Tree) should be (Árbol)
-
-{glossary}
-"""
-
-first_translation_instructions = """
-Translate the following text to spanish:
-{text}
-
-Follow the instructions:
-{translation_instructions}
-"""
-
-improve_translation_instructions = """
-These are the last two messages that have been exchanged so far from the user asking for the translation:
-<Messages>
-{messages}
-</Messages>
-
-Take a look at the feedback made by the user and improve the translation. Following the instructions 
-{translation_instructions}
-"""
 
 llm = init_chat_model(model="google_genai:gemini-2.5-flash-lite")
-
-
-def format_glossary(glossary: dict[str, dict[str, str]]) -> str:
-    return "\n".join(
-        [
-            f"{key}: {value['value']} ({value['comment']})"
-            for key, value in glossary.items()
-        ]
-    )
 
 
 def translate(state: TranslateState) -> Command[Literal["__end__"]]:
@@ -85,24 +59,27 @@ def translate(state: TranslateState) -> Command[Literal["__end__"]]:
     translate_iterations = state.get("translate_iterations", 0)
     prompt = ""
 
-    prompt_translation_instructions = translation_instructions.format(
-        glossary=format_glossary(glossary_en_es)
-    )
-
     if translate_iterations == 0:
         state["original_text"] = state["messages"][-1].content
+        found_glossary_words = match_words_from_glossary(
+            glossary_en_es, state["original_text"]
+        )
+        state["words_to_match"] = found_glossary_words
+
         prompt = first_translation_instructions.format(
             text=state["original_text"],
-            translation_instructions=prompt_translation_instructions,
+            translation_instructions=translation_instructions.format(
+                glossary=format_glossary(found_glossary_words),
+            ),
         )
     else:
         last_two_messages = state["messages"][-2:]
         prompt = improve_translation_instructions.format(
             messages=get_buffer_string(last_two_messages),
-            translation_instructions=prompt_translation_instructions,
+            translation_instructions=translation_instructions.format(
+                glossary={},  # Glossary can be empty because we are just fixing based on input from the user
+            ),
         )
-
-    print("prompt", prompt)
 
     response = llm.invoke(prompt)
 
@@ -113,6 +90,7 @@ def translate(state: TranslateState) -> Command[Literal["__end__"]]:
             "original_text": state["original_text"],
             "translate_iterations": translate_iterations + 1,
             "current_translation": response.content,  # TODO: REMOVE, THIS IS FOR DEBUGGING PURPOSES IN LANGGRAPH STUDIO
+            "words_to_match": state["words_to_match"],
         },
     )
 
