@@ -53,26 +53,30 @@ graph_builder.add_edge("chatbot", END)
 
 graph = graph_builder.compile()
 
+def main():
 # Stream the updates of the chatbot
-def stream_graph_updates(user_input: str):
-    events = graph.stream(
-        {"messages": [{"role": "user", "content": user_input}]},
-        # config={"configurable": {"llm_model": "fake model"}}, # set another model
-        stream_mode="values",
-    )
-    for event in events:
-        event["messages"][-1].pretty_print()
+    def stream_graph_updates(user_input: str):
+        events = graph.stream(
+            {"messages": [{"role": "user", "content": user_input}]},
+            # config={"configurable": {"llm_model": "fake model"}}, # set another model
+            stream_mode="values",
+        )
+        for event in events:
+            event["messages"][-1].pretty_print()
 
-while True:
-    try:
-        user_input = input("User: ")
-        if user_input.lower() in ["quit", "exit", "q"]:
-            print("Goodbye! Your conversation has been saved to SQLite.")
+    while True:
+        try:
+            user_input = input("User: ")
+            if user_input.lower() in ["quit", "exit", "q"]:
+                print("Goodbye! Your conversation has been saved to SQLite.")
+                break
+            stream_graph_updates(user_input)
+        except:
+            # fallback if input() is not available
+            user_input = "What do you know about LangGraph?"
+            print("User: " + user_input)
+            stream_graph_updates(user_input)
             break
-        stream_graph_updates(user_input)
-    except:
-        # fallback if input() is not available
-        user_input = "What do you know about LangGraph?"
-        print("User: " + user_input)
-        stream_graph_updates(user_input)
-        break
+
+if __name__ == "__main__":
+    main()

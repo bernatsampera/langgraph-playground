@@ -1,0 +1,11 @@
+{
+  "dockerfile_lines": [],
+  "graphs": {
+    "Command test": "./examples/deep_researcher/use_command.py:graph",
+    "Deep2": "./examples/deep_researcher/deep2.py:deep_researcher"
+  },
+  "python_version": "3.12",
+  "env": ".env",
+  "dependencies": ["."],
+  "auth": {}
+}
