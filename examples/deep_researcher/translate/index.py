@@ -25,6 +25,14 @@ from examples.deep_researcher.translate.utils import format_glossary
 glossary_manager = GlossaryManager()
 
 
+class ImproveGlossaryResponse(BaseModel):
+    """Response from the improve glossary agent."""
+
+    source: str
+    target: str
+    note: str
+
+
 class TranslateInputState(MessagesState):
     """Input state containing only messages."""
 
@@ -41,6 +49,7 @@ class TranslateState(TranslateInputState):
         str, str
     ] = {}  # TODO: REMOVE, THIS IS FOR DEBUGGING PURPOSES IN LANGGRAPH STUDIO
     translate_iterations: int = 0
+    proposed_glossary_term: ImproveGlossaryResponse | None = None
 
 
 llm = init_chat_model(model="google_genai:gemini-2.5-flash-lite")
@@ -111,15 +120,7 @@ def refine_translation(state: TranslateState) -> Command[Literal["improve_glossa
     )
 
 
-class ImproveGlossaryResponse(BaseModel):
-    """Response from the improve glossary agent."""
-
-    source: str
-    target: str
-    note: str
-
-
-def improve_glossary(state: TranslateState) -> Command[Literal["supervisor"]]:
+def improve_glossary(state: TranslateState) -> Command[Literal["confirm_glossary"]]:
     last_three_messages = state["messages"][-3:]
 
     llm_with_structured_output = llm.with_structured_output(ImproveGlossaryResponse)
@@ -133,22 +134,79 @@ def improve_glossary(state: TranslateState) -> Command[Literal["supervisor"]]:
 
     print(response)
 
-    # Add the response to the glossary
+    # Store the proposed term for confirmation
     if response.source and response.target:
-        success = glossary_manager.add_source(
-            source=response.source,
-            target=response.target,
-            note=response.note,
+        return Command(
+            goto="confirm_glossary",
+            update={
+                "proposed_glossary_term": response,
+                "messages": [
+                    AIMessage(
+                        content=f"I suggest adding this term to the glossary:\n\nSource: {response.source}\nTarget: {response.target}\nNote: {response.note}"
+                    )
+                ],
+            },
         )
+    else:
+        # No valid term to add, go back to supervisor
+        return Command(
+            goto="supervisor",
+            update={
+                "messages": [AIMessage(content="No glossary improvement detected.")],
+            },
+        )
+
+
+def confirm_glossary(
+    state: TranslateState,
+) -> Command[Literal["add_to_glossary", "supervisor"]]:
+    """Ask user for confirmation before adding term to glossary."""
+    proposed_term = state["proposed_glossary_term"]
+
+    confirmation_message = f"Do you want to add this term to the glossary?\n\nSource (English): {proposed_term.source}\nTarget (Spanish): {proposed_term.target}\nNote: {proposed_term.note}\n\nType 'yes' to add, 'no' to skip, or provide your own correction."
+
+    user_response = interrupt({"confirmation_request": confirmation_message})
+
+    if user_response.lower().strip() in ["yes", "y", "sí", "si"]:
+        return Command(goto="add_to_glossary")
+    else:
+        return Command(
+            goto="supervisor",
+            update={
+                "messages": [
+                    HumanMessage(content=user_response),
+                    AIMessage(
+                        content="Glossary term not added. Continuing with translation."
+                    ),
+                ],
+                "proposed_glossary_term": None,
+            },
+        )
+
+
+def add_to_glossary(state: TranslateState) -> Command[Literal["supervisor"]]:
+    """Add the confirmed term to the glossary."""
+    proposed_term = state["proposed_glossary_term"]
+
+    if proposed_term:
+        success = glossary_manager.add_source(
+            source=proposed_term.source,
+            target=proposed_term.target,
+            note=proposed_term.note,
+        )
+
         if success:
-            print(f"Added source '{response.source}' to glossary")
+            message = f"✅ Added term '{proposed_term.source}' → '{proposed_term.target}' to glossary."
         else:
-            print(f"Failed to add source '{response.source}' to glossary")
+            message = f"❌ Failed to add term '{proposed_term.source}' to glossary."
+    else:
+        message = "No term to add to glossary."
 
     return Command(
         goto="supervisor",
         update={
-            "messages": [AIMessage(content=response.note)],
+            "messages": [AIMessage(content=message)],
+            "proposed_glossary_term": None,
         },
     )
 
@@ -159,6 +217,8 @@ graph.add_node("supervisor", supervisor)
 graph.add_node("initial_translation", initial_translation)
 graph.add_node("refine_translation", refine_translation)
 graph.add_node("improve_glossary", improve_glossary)
+graph.add_node("confirm_glossary", confirm_glossary)
+graph.add_node("add_to_glossary", add_to_glossary)
 
 graph.add_edge(START, "initial_translation")
 
