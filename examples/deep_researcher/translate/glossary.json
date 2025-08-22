@@ -1,0 +1,18 @@
+{
+  "instrument": {
+    "target": "documento",
+    "note": "Used when used in notarial acts and the legal document is being refered as instrument. Do not use in other contexts."
+  },
+  "registrar": {
+    "target": "secretario/a",
+    "note": "When used as a title of a school or university"
+  },
+  "global history": {
+    "target": "historia universal",
+    "note": "When used as a subject. Just when the whole word global history appears, never use when global is not present"
+  },
+  "changes": {
+    "target": "ajustes",
+    "note": "Use 'ajustes' instead of 'cambios' in this context."
+  }
+}
