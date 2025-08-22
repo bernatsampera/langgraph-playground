@@ -33,9 +33,6 @@ glossary_manager = GlossaryManager()
 llm = init_chat_model(model="google_genai:gemini-2.5-flash-lite")
 
 
-# the fish drink in the river
-
-
 def initial_translation(state: TranslateState) -> Command[Literal["supervisor"]]:
     text_to_translate = state["messages"][-1].content
 
@@ -105,7 +102,6 @@ def update_glossary_supervisor(
 ) -> Command[Literal["__end__"]]:
     last_three_messages = state["messages"][-3:]
 
-    # llm_with_structured_output = llm.with_structured_output(UpdateGlossaryResponse)
     # Get third last message starting from the last message
     translation_with_errors = last_three_messages[-3]
     user_feedback = last_three_messages[-2]
@@ -177,39 +173,12 @@ def confirm_glossary(
     )
 
 
-# def add_to_glossary(state: TranslateState) -> Command[Literal["supervisor"]]:
-#     """Add the confirmed term to the glossary."""
-#     proposed_term = state["proposed_glossary_term"]
-
-#     if proposed_term:
-#         success = glossary_manager.add_source(
-#             source=proposed_term.source,
-#             target=proposed_term.target,
-#             note=proposed_term.note,
-#         )
-
-#         if success:
-#             message = f"✅ Added term '{proposed_term.source}' → '{proposed_term.target}' to glossary."
-#         else:
-#             message = f"❌ Failed to add term '{proposed_term.source}' to glossary."
-#     else:
-#         message = "No term to add to glossary."
-
-#     return Command(
-#         goto=END,
-#         update={
-#             "proposed_glossary_term": None,
-#         },
-#     )
-
-
 update_glossary_builder = StateGraph(UpdateGlossaryState)
 
 update_glossary_builder.add_node(
     "update_glossary_supervisor", update_glossary_supervisor
 )
 update_glossary_builder.add_node("confirm_glossary", confirm_glossary)
-# update_glossary_builder.add_node("add_to_glossary", add_to_glossary)
 
 update_glossary_builder.add_edge(START, "update_glossary_supervisor")
 
@@ -222,8 +191,6 @@ graph.add_node("supervisor", supervisor)
 graph.add_node("initial_translation", initial_translation)
 graph.add_node("refine_translation", refine_translation)
 graph.add_node("update_glossary_subgraph", update_glossary_subgraph)
-# graph.add_node("confirm_glossary", confirm_glossary)
-# graph.add_node("add_to_glossary", add_to_glossary)
 
 graph.add_edge(START, "initial_translation")
 graph.add_edge("update_glossary_subgraph", "supervisor")
