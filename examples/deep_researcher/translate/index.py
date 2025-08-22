@@ -1,55 +1,33 @@
-from typing import Annotated, Literal
+from typing import Literal
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import (
     AIMessage,
-    BaseMessage,
     HumanMessage,
     get_buffer_string,
 )
-from langgraph.graph import START, MessagesState, StateGraph, add_messages
-from langgraph.graph.state import BaseModel
+from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
 
 from examples.deep_researcher.translate.glossary_manager import GlossaryManager
 from examples.deep_researcher.translate.match_words import match_words_from_glossary
 from examples.deep_researcher.translate.prompts import (
     first_translation_instructions,
-    improve_glossary_instructions,
-    improve_translation_instructions,
+    lead_update_glossary_prompt,
     translation_instructions,
+    update_translation_instructions,
+)
+from examples.deep_researcher.translate.state import (
+    ConductUpdate,
+    NoUpdate,
+    TranslateInputState,
+    TranslateState,
+    UpdateGlossaryState,
 )
 from examples.deep_researcher.translate.utils import format_glossary
 
 # Initialize glossary manager
 glossary_manager = GlossaryManager()
-
-
-class ImproveGlossaryResponse(BaseModel):
-    """Response from the improve glossary agent."""
-
-    source: str
-    target: str
-    note: str
-
-
-class TranslateInputState(MessagesState):
-    """Input state containing only messages."""
-
-
-class TranslateState(TranslateInputState):
-    """Main agent state containing messages."""
-
-    messages: Annotated[list[BaseMessage], add_messages]
-    original_text: str = ""
-    current_translation: str = (
-        ""  # TODO: REMOVE, THIS IS FOR DEBUGGING PURPOSES IN LANGGRAPH STUDIO
-    )
-    words_to_match: dict[
-        str, str
-    ] = {}  # TODO: REMOVE, THIS IS FOR DEBUGGING PURPOSES IN LANGGRAPH STUDIO
-    translate_iterations: int = 0
-    proposed_glossary_term: ImproveGlossaryResponse | None = None
 
 
 llm = init_chat_model(model="google_genai:gemini-2.5-flash-lite")
@@ -100,16 +78,18 @@ def supervisor(
     )
 
 
-def refine_translation(state: TranslateState) -> Command[Literal["improve_glossary"]]:
+def refine_translation(
+    state: TranslateState,
+) -> Command[Literal["update_glossary_subgraph"]]:
     last_two_messages = state["messages"][-2:]
-    prompt = improve_translation_instructions.format(
+    prompt = update_translation_instructions.format(
         messages=get_buffer_string(last_two_messages),
         translation_instructions=translation_instructions.format(glossary={}),
     )
     response = llm.invoke(prompt)
 
     return Command(
-        goto="improve_glossary",
+        goto="update_glossary_subgraph",
         update={
             "messages": [AIMessage(content=response.content)],
             "current_translation": HumanMessage(
@@ -120,95 +100,120 @@ def refine_translation(state: TranslateState) -> Command[Literal["improve_glossa
     )
 
 
-def improve_glossary(state: TranslateState) -> Command[Literal["confirm_glossary"]]:
+def update_glossary_supervisor(
+    state: TranslateState,
+) -> Command[Literal["__end__"]]:
     last_three_messages = state["messages"][-3:]
 
-    llm_with_structured_output = llm.with_structured_output(ImproveGlossaryResponse)
+    # llm_with_structured_output = llm.with_structured_output(UpdateGlossaryResponse)
+    # Get third last message starting from the last message
+    translation_with_errors = last_three_messages[-3]
+    user_feedback = last_three_messages[-2]
 
-    prompt = improve_glossary_instructions.format(
-        messages=get_buffer_string(last_three_messages),
+    prompt = lead_update_glossary_prompt.format(
+        translation_with_errors=translation_with_errors.content,
+        user_feedback=user_feedback.content,
         original_text=state["original_text"],
     )
-    print("prompt improve glossary", prompt)
-    response = llm_with_structured_output.invoke(prompt)
 
-    print(response)
+    update_glossary_tools = [ConductUpdate, NoUpdate]
+
+    llm_with_tool = llm.bind_tools(update_glossary_tools)
+    response = llm_with_tool.invoke(prompt)
 
     # Store the proposed term for confirmation
-    if response.source and response.target:
+    if response.tool_calls and len(response.tool_calls) > 0:
         return Command(
             goto="confirm_glossary",
             update={
-                "proposed_glossary_term": response,
-                "messages": [
-                    AIMessage(
-                        content=f"I suggest adding this term to the glossary:\n\nSource: {response.source}\nTarget: {response.target}\nNote: {response.note}"
-                    )
-                ],
+                "messages": [response],
             },
         )
     else:
-        # No valid term to add, go back to supervisor
+        print("No valid term to add")
+
         return Command(
-            goto="supervisor",
+            goto=END,
             update={
-                "messages": [AIMessage(content="No glossary improvement detected.")],
+                "messages": [AIMessage(content="No glossary update detected.")],
             },
         )
 
 
 def confirm_glossary(
     state: TranslateState,
-) -> Command[Literal["add_to_glossary", "supervisor"]]:
+) -> Command[Literal["__end__"]]:
     """Ask user for confirmation before adding term to glossary."""
-    proposed_term = state["proposed_glossary_term"]
+    messages = state.get("messages", [])
+    most_recent_message = messages[-1]
 
-    confirmation_message = f"Do you want to add this term to the glossary?\n\nSource (English): {proposed_term.source}\nTarget (Spanish): {proposed_term.target}\nNote: {proposed_term.note}\n\nType 'yes' to add, 'no' to skip, or provide your own correction."
+    conduct_update_calls = [
+        tool_call
+        for tool_call in most_recent_message.tool_calls
+        if tool_call["name"] == "ConductUpdate"
+    ]
 
-    user_response = interrupt({"confirmation_request": confirmation_message})
+    updates_logs = []
 
-    if user_response.lower().strip() in ["yes", "y", "sí", "si"]:
-        return Command(goto="add_to_glossary")
-    else:
-        return Command(
-            goto="supervisor",
-            update={
-                "messages": [
-                    HumanMessage(content=user_response),
-                    AIMessage(
-                        content="Glossary term not added. Continuing with translation."
-                    ),
-                ],
-                "proposed_glossary_term": None,
-            },
-        )
+    for conduct_update_call in conduct_update_calls:
+        source = conduct_update_call["args"]["source"]
+        target = conduct_update_call["args"]["target"]
+        note = conduct_update_call["args"]["note"]
+        confirmation_message = f"Do you want to add this term to the glossary?\n\nSource (English): {source}\nTarget (Spanish): {target}\nNote: {note}\n\nType 'yes' to add, 'no' to skip, or provide your own correction."
 
+        user_response = interrupt({"confirmation_request": confirmation_message})
 
-def add_to_glossary(state: TranslateState) -> Command[Literal["supervisor"]]:
-    """Add the confirmed term to the glossary."""
-    proposed_term = state["proposed_glossary_term"]
-
-    if proposed_term:
-        success = glossary_manager.add_source(
-            source=proposed_term.source,
-            target=proposed_term.target,
-            note=proposed_term.note,
-        )
-
-        if success:
-            message = f"✅ Added term '{proposed_term.source}' → '{proposed_term.target}' to glossary."
+        if user_response.lower().strip() in ["yes", "y", "sí", "si"]:
+            glossary_manager.add_source(source, target, note)
+            updates_logs.append(f"✅ Added term '{source}' → '{target}' to glossary.")
         else:
-            message = f"❌ Failed to add term '{proposed_term.source}' to glossary."
-    else:
-        message = "No term to add to glossary."
+            updates_logs.append(f"❌ Failed to add term '{source}' to glossary.")
 
     return Command(
-        goto="supervisor",
+        goto=END,
         update={
-            "messages": [AIMessage(content=message)],
-            "proposed_glossary_term": None,
+            "messages": [AIMessage(content="\n".join(updates_logs))],
         },
     )
+
+
+# def add_to_glossary(state: TranslateState) -> Command[Literal["supervisor"]]:
+#     """Add the confirmed term to the glossary."""
+#     proposed_term = state["proposed_glossary_term"]
+
+#     if proposed_term:
+#         success = glossary_manager.add_source(
+#             source=proposed_term.source,
+#             target=proposed_term.target,
+#             note=proposed_term.note,
+#         )
+
+#         if success:
+#             message = f"✅ Added term '{proposed_term.source}' → '{proposed_term.target}' to glossary."
+#         else:
+#             message = f"❌ Failed to add term '{proposed_term.source}' to glossary."
+#     else:
+#         message = "No term to add to glossary."
+
+#     return Command(
+#         goto=END,
+#         update={
+#             "proposed_glossary_term": None,
+#         },
+#     )
+
+
+update_glossary_builder = StateGraph(UpdateGlossaryState)
+
+update_glossary_builder.add_node(
+    "update_glossary_supervisor", update_glossary_supervisor
+)
+update_glossary_builder.add_node("confirm_glossary", confirm_glossary)
+# update_glossary_builder.add_node("add_to_glossary", add_to_glossary)
+
+update_glossary_builder.add_edge(START, "update_glossary_supervisor")
+
+update_glossary_subgraph = update_glossary_builder.compile()
 
 
 graph = StateGraph(TranslateState, input_schema=TranslateInputState)
@@ -216,10 +221,11 @@ graph = StateGraph(TranslateState, input_schema=TranslateInputState)
 graph.add_node("supervisor", supervisor)
 graph.add_node("initial_translation", initial_translation)
 graph.add_node("refine_translation", refine_translation)
-graph.add_node("improve_glossary", improve_glossary)
-graph.add_node("confirm_glossary", confirm_glossary)
-graph.add_node("add_to_glossary", add_to_glossary)
+graph.add_node("update_glossary_subgraph", update_glossary_subgraph)
+# graph.add_node("confirm_glossary", confirm_glossary)
+# graph.add_node("add_to_glossary", add_to_glossary)
 
 graph.add_edge(START, "initial_translation")
+graph.add_edge("update_glossary_subgraph", "supervisor")
 
 graph = graph.compile()
